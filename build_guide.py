@@ -18,7 +18,8 @@ import xml.etree.ElementTree as ET
 
 BASE = "https://epgshare01.online/epgshare01/"
 SOURCES = ["epg_ripper_UK1.xml.gz", "epg_ripper_US2.xml.gz",
-           "epg_ripper_US_LOCALS1.xml.gz", "epg_ripper_FANDUEL1.xml.gz"]
+           "epg_ripper_US_LOCALS1.xml.gz", "epg_ripper_FANDUEL1.xml.gz",
+           "epg_ripper_PEACOCK1.xml.gz"]
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 MIN_PROGRAMMES = 20000  # refuse to publish a suspiciously empty guide
 
@@ -37,6 +38,12 @@ def main():
     targets = {}
     for provider_id, source_id in mapping.items():
         targets.setdefault(source_id, []).append(provider_id)
+    # names.json: provider channels with no EPG ID, matched by exact channel name.
+    names_path = os.path.join(os.path.dirname(os.path.abspath(mapping_path)), "names.json")
+    by_name = json.load(open(names_path)) if os.path.exists(names_path) else {}
+    named = set(by_name)
+    for provider_name, source_id in by_name.items():
+        targets.setdefault(source_id, []).append(provider_name)
 
     channels, programmes, failed = [], [], []
     with tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +57,10 @@ def main():
                             for pid in targets.get(el.get("id"), ()):
                                 c = copy.deepcopy(el)
                                 c.set("id", pid)
+                                if pid in named:
+                                    for dn in c.findall("display-name"):
+                                        c.remove(dn)
+                                    ET.SubElement(c, "display-name").text = pid
                                 channels.append(c)
                             el.clear()
                         elif el.tag == "programme":
